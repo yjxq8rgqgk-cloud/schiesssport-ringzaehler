@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Ringzahl &amp; Schusszahl</title>
+<style>
+  /* ---- Halo design tokens ---- */
+  :root {
+    --halo-bg: #000000;
+    --halo-surface-1: #060606;
+    --halo-surface-2: #0a0a0a;
+    --halo-surface-3: #111111;
+    --halo-surface-hover: #1a1a1a;
+    --halo-fg: #ffffff;
+    --halo-fg-muted: rgba(255, 255, 255, 0.55);
+    --halo-fg-dim: rgba(255, 255, 255, 0.4);
+    --halo-accent: #0099ff;
+    --halo-accent-soft: rgba(0, 153, 255, 0.35);
+    --halo-accent-glow: rgba(0, 153, 255, 0.55);
+    --halo-success: #4ade80;
+    --halo-hairline: rgba(255, 255, 255, 0.09);
+    --halo-hairline-strong: rgba(255, 255, 255, 0.14);
+    --halo-ring: inset 0 0 0 1px var(--halo-hairline);
+    --halo-ring-strong: inset 0 0 0 1px var(--halo-hairline-strong);
+    --halo-radius-sm: 8px;
+    --halo-radius-md: 14px;
+    --halo-radius-lg: 20px;
+    --halo-radius-xl: 26px;
+    --halo-radius-pill: 999px;
+    --halo-space-1: 4px;
+    --halo-space-2: 8px;
+    --halo-space-3: 12px;
+    --halo-space-4: 16px;
+    --halo-space-5: 24px;
+    --halo-space-6: 32px;
+    --halo-font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --halo-font-display: "SF Pro Display", "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: var(--halo-bg);
+    color: var(--halo-fg);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  button { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+  input::placeholder { color: rgba(255, 255, 255, .35); }
+
+  .halo-root {
+    min-height: 100dvh;
+    background: var(--halo-bg);
+    display: flex;
+    justify-content: center;
+    font-family: var(--halo-font-body);
+  }
+  .app {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--halo-space-3);
+    padding: max(var(--halo-space-4), env(safe-area-inset-top)) var(--halo-space-4) max(var(--halo-space-4), env(safe-area-inset-bottom));
+  }
+
+  /* ---- Scorecard (totals) ---- */
+  .scorecard {
+    background: var(--halo-surface-2);
+    border-radius: var(--halo-radius-xl);
+    box-shadow: var(--halo-ring-strong);
+    overflow: hidden;
+  }
+  .active-name {
+    padding: var(--halo-space-3) var(--halo-space-4) 0;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--halo-accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .totals { display: grid; grid-template-columns: 1fr 1fr; }
+  .total-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--halo-space-1);
+    padding: var(--halo-space-2) var(--halo-space-3) var(--halo-space-3);
+  }
+  .total-cell + .total-cell { border-left: 1px solid var(--halo-hairline-strong); }
+  .total-label {
+    font-size: 12px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--halo-fg-muted);
+  }
+  .total-value {
+    font-family: var(--halo-font-display);
+    font-weight: 500;
+    font-size: clamp(40px, 12.5vw, 66px);
+    line-height: 1;
+    letter-spacing: -.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Recent shots ---- */
+  .recent {
+    display: flex;
+    padding: 0 var(--halo-space-2);
+    font-size: 13px;
+    color: var(--halo-fg-dim);
+  }
+  .recent-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .recent-list {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .recent-prev { flex: none; color: var(--halo-fg-muted); }
+  .recent-last { flex: none; color: #fff; font-weight: 800; font-size: 15px; }
+
+  /* ---- Keypad ---- */
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(4, clamp(40px, 6dvh, 74px));
+    gap: var(--halo-space-3);
+  }
+  .key {
+    position: relative;
+    min-height: 62px;
+    border: 0;
+    border-radius: var(--halo-radius-pill);
+    background: var(--halo-surface-3);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+    color: var(--halo-fg);
+    font-family: var(--halo-font-display);
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: -.02em;
+    cursor: pointer;
+    transition: background .15s, transform .08s;
+  }
+  .key.key-fehler { font-size: 18px; }
+  .key.active { box-shadow: inset 0 0 0 1px rgba(0, 153, 255, .35); }
+  .key:active { background: var(--halo-surface-hover); transform: scale(.96); }
+  .key-badge {
+    position: absolute;
+    right: 10px;
+    bottom: 7px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    border-radius: var(--halo-radius-pill);
+    background: rgba(255, 255, 255, .06);
+    color: var(--halo-fg-dim);
+    font-family: var(--halo-font-body);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 22px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .key.active .key-badge { background: var(--halo-accent); color: #fff; }
+
+  /* ---- Teams / shooters ---- */
+  .teams {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--halo-space-3);
+    align-content: start;
+  }
+  .team { display: flex; flex-direction: column; gap: 6px; }
+  .person {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 40px;
+    padding: 0 14px 0 3px;
+    border-radius: var(--halo-radius-pill);
+    background: var(--halo-surface-3);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+    cursor: pointer;
+    transition: background .15s, box-shadow .15s;
+  }
+  .person.active {
+    background: rgba(0, 153, 255, .14);
+    box-shadow: inset 0 0 0 1.5px var(--halo-accent);
+  }
+  /* Left-edge zone: the ONLY spot that opens the keyboard to edit the name. */
+  .person .edit-zone {
+    flex: none;
+    width: 38px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--halo-fg-dim);
+    cursor: text;
+  }
+  .person .edit-zone svg { width: 15px; height: 15px; display: block; }
+  .person.active .edit-zone { color: var(--halo-accent); }
+  .person.editing .edit-zone { color: var(--halo-accent); }
+  .person input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--halo-fg);
+    font-family: var(--halo-font-body);
+    font-size: 16px;
+    font-weight: 400;
+    /* Taps fall through to the row (= select) unless we're actively editing. */
+    pointer-events: none;
+  }
+  .person.editing input { pointer-events: auto; }
+  .person.active input { font-weight: 600; }
+  .person-ringe {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--halo-fg-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .person.active .person-ringe { color: #fff; }
+  .team-sum {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 14px 0;
+    border-top: 1px solid var(--halo-hairline-strong);
+    margin-top: 2px;
+  }
+  .team-sum-label {
+    font-size: 12px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--halo-fg-muted);
+  }
+  .team-sum-value {
+    font-family: var(--halo-font-display);
+    font-size: 22px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Footer actions ---- */
+  .actions { display: flex; flex-direction: column; gap: var(--halo-space-3); }
+  .actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--halo-space-3); }
+  .btn {
+    height: 54px;
+    border: 0;
+    border-radius: var(--halo-radius-pill);
+    font-family: var(--halo-font-body);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-clear {
+    background: var(--halo-surface-3);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  }
+  .btn-clear.confirm { background: #b42318; }
+  .btn-undo { background: #fff; color: #000; }
+  .btn-undo:active { background: #e6e6e6; }
+  /* Global "clear everything" — always a red tone, acts only after a prompt. */
+  .btn-clear-all {
+    height: 50px;
+    background: rgba(180, 35, 24, .16);
+    color: #ff6b5e;
+    box-shadow: inset 0 0 0 1px rgba(255, 90, 78, .38);
+  }
+  .btn-clear-all:active { background: rgba(180, 35, 24, .28); }
+  .btn-clear-all.confirm {
+    background: #b42318;
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+  }
+</style>
+</head>
+<body>
+<div class="halo-root">
+  <div class="app">
+
+    <!-- Totals for the active shooter -->
+    <div class="scorecard">
+      <div class="active-name" id="activeName"></div>
+      <div class="totals">
+        <div class="total-cell">
+          <div class="total-label">Gesamtringe</div>
+          <div class="total-value" id="ringe">0</div>
+        </div>
+        <div class="total-cell">
+          <div class="total-label">Gesamttreffer</div>
+          <div class="total-value" id="treffer">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent shots -->
+    <div class="recent">
+      <span class="recent-wrap">Letzte:
+        <span class="recent-list">
+          <span class="recent-prev" id="recentPrev"></span>
+          <span class="recent-last" id="recentLast"></span>
+        </span>
+      </span>
+    </div>
+
+    <!-- Keypad -->
+    <div class="keys" id="keys"></div>
+
+    <!-- Teams -->
+    <div class="teams" id="teams"></div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <div class="actions-row">
+        <button class="btn btn-clear" id="btnClear">Schütze löschen</button>
+        <button class="btn btn-undo" id="btnUndo">zurück</button>
+      </div>
+      <button class="btn btn-clear-all" id="btnClearAll">alles löschen</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Ring values of the keypad: 10 down to 0, plus "Fehler" (miss).
+  var KEY_VALUES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, "F"];
+
+  // Pencil glyph marking the left-edge "edit name" zone of each shooter row.
+  var PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+  // 6 shooters, 2 teams of 3. Each shooter has a shot history and a name.
+  var state = {
+    hists: [[], [], [], [], [], []],
+    names: ["", "", "", "", "", ""],
+    active: 0,
+    confirm: false,     // per-shooter "Schütze löschen" confirmation
+    confirmAll: false   // global "alles löschen" confirmation
+  };
+  var confirmTimer = null;
+  var confirmAllTimer = null;
+
+  // ---- Persistence: names + scores + active shooter survive a reload. ----
+  var STORE_KEY = "ringzaehler_v1";
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        names: state.names, hists: state.hists, active: state.active
+      }));
+    } catch (e) { /* storage unavailable (private mode etc.) — ignore */ }
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.names) && d.names.length === 6) {
+        state.names = d.names.map(function (n) { return typeof n === "string" ? n : ""; });
+      }
+      if (d && Array.isArray(d.hists) && d.hists.length === 6) {
+        state.hists = d.hists.map(function (h) {
+          return Array.isArray(h) ? h.filter(function (v) { return v === "F" || typeof v === "number"; }) : [];
+        });
+      }
+      if (d && typeof d.active === "number" && d.active >= 0 && d.active < 6) state.active = d.active;
+    } catch (e) { /* corrupt data — start fresh */ }
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    activeName: $("activeName"),
+    ringe: $("ringe"),
+    treffer: $("treffer"),
+    recentPrev: $("recentPrev"),
+    recentLast: $("recentLast"),
+    keys: $("keys"),
+    teams: $("teams"),
+    btnClear: $("btnClear"),
+    btnUndo: $("btnUndo"),
+    btnClearAll: $("btnClearAll")
+  };
+
+  function sumOf(hist) {
+    return hist.reduce(function (s, v) { return s + (v === "F" ? 0 : v); }, 0);
+  }
+  function lbl(v) { return v === "F" ? "F" : String(v); }
+  // Default label like "Schütze 1.2" = team (1 or 2) . position within team (1-3).
+  function defaultName(i) {
+    return "Schütze " + (Math.floor(i / 3) + 1) + "." + (i % 3 + 1);
+  }
+  function shooterLabel(i) {
+    return state.names[i].trim() || defaultName(i);
+  }
+
+  function cancelConfirms() {
+    state.confirm = false;
+    state.confirmAll = false;
+    clearTimeout(confirmTimer);
+    clearTimeout(confirmAllTimer);
+  }
+
+  // Replace the active shooter's history and reset the delete confirmations.
+  function setHist(hist) {
+    state.hists[state.active] = hist;
+    cancelConfirms();
+    save();
+    render();
+  }
+
+  function press(v) {
+    var hist = state.hists[state.active];
+    setHist(hist.concat([v]));
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
+
+  function undo() {
+    var hist = state.hists[state.active];
+    if (hist.length) setHist(hist.slice(0, -1));
+  }
+
+  // "Schütze löschen": clear the ACTIVE shooter's rings, after one confirm tap.
+  function clear() {
+    var hist = state.hists[state.active];
+    if (!hist.length) return;
+    state.confirmAll = false;
+    clearTimeout(confirmAllTimer);
+    if (!state.confirm) {
+      state.confirm = true;
+      clearTimeout(confirmTimer);
+      confirmTimer = setTimeout(function () {
+        state.confirm = false;
+        render();
+      }, 3000);
+      render();
+      return;
+    }
+    setHist([]);
+  }
+
+  // "alles löschen": clear EVERY shooter's rings (names stay), after one confirm tap.
+  function clearAll() {
+    var any = state.hists.some(function (h) { return h.length; });
+    if (!any) return;
+    state.confirm = false;
+    clearTimeout(confirmTimer);
+    if (!state.confirmAll) {
+      state.confirmAll = true;
+      clearTimeout(confirmAllTimer);
+      confirmAllTimer = setTimeout(function () {
+        state.confirmAll = false;
+        render();
+      }, 3000);
+      render();
+      return;
+    }
+    state.confirmAll = false;
+    clearTimeout(confirmAllTimer);
+    state.hists = [[], [], [], [], [], []];
+    save();
+    render();
+  }
+
+  function selectShooter(i) {
+    if (state.active !== i) {
+      state.active = i;
+      cancelConfirms();
+      save();
+      render();
+    }
+  }
+
+  // ---- Build the keypad once; counts/active state are updated on render. ----
+  function buildKeys() {
+    el.keys.innerHTML = "";
+    KEY_VALUES.forEach(function (v) {
+      var btn = document.createElement("button");
+      btn.className = "key" + (v === "F" ? " key-fehler" : "");
+      btn.appendChild(document.createTextNode(v === "F" ? "Fehler" : String(v)));
+      var badge = document.createElement("span");
+      badge.className = "key-badge";
+      badge.textContent = "0";
+      btn.appendChild(badge);
+      btn.addEventListener("click", function () { press(v); });
+      btn._badge = badge;
+      el.keys.appendChild(btn);
+    });
+  }
+
+  // ---- Build the two team columns once; values are updated on render. ----
+  function buildTeams() {
+    el.teams.innerHTML = "";
+    [0, 1].forEach(function (t) {
+      var team = document.createElement("div");
+      team.className = "team";
+
+      [0, 1, 2].forEach(function (j) {
+        var i = t * 3 + j;
+        var row = document.createElement("div");
+        row.className = "person";
+        // Tap anywhere on the row = just select this shooter (no keyboard).
+        row.addEventListener("click", function () { selectShooter(i); });
+
+        // Left-edge pencil zone = the only way to edit the name (opens keyboard).
+        var editZone = document.createElement("div");
+        editZone.className = "edit-zone";
+        editZone.title = "Name bearbeiten";
+        editZone.innerHTML = PENCIL_SVG;
+        editZone.addEventListener("click", function (e) {
+          e.stopPropagation();        // don't let the row handler run as a plain select
+          selectShooter(i);
+          row.classList.add("editing");
+          input.focus();
+          input.select();             // select all so typing replaces the name
+        });
+
+        var input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = defaultName(i);
+        input.addEventListener("input", function () {
+          state.names[i] = input.value;
+          save();          // persist the name immediately
+          updateDynamic(); // keep totals/labels in sync without rebuilding
+        });
+        input.addEventListener("blur", function () { row.classList.remove("editing"); });
+
+        var ringe = document.createElement("span");
+        ringe.className = "person-ringe";
+
+        row.appendChild(editZone);
+        row.appendChild(input);
+        row.appendChild(ringe);
+        team.appendChild(row);
+
+        row._input = input;
+        row._ringe = ringe;
+      });
+
+      var sumRow = document.createElement("div");
+      sumRow.className = "team-sum";
+      var sumLabel = document.createElement("span");
+      sumLabel.className = "team-sum-label";
+      sumLabel.textContent = "Summe";
+      var sumValue = document.createElement("span");
+      sumValue.className = "team-sum-value";
+      sumRow.appendChild(sumLabel);
+      sumRow.appendChild(sumValue);
+      team.appendChild(sumRow);
+      team._sumValue = sumValue;
+
+      el.teams.appendChild(team);
+    });
+  }
+
+  // Update only the data-driven bits (no structural rebuild) so inputs keep focus.
+  function updateDynamic() {
+    var hist = state.hists[state.active];
+
+    // Totals
+    el.activeName.textContent = shooterLabel(state.active);
+    el.ringe.textContent = sumOf(hist);
+    el.treffer.textContent = hist.length;
+
+    // Recent shots: all but the last (up to 39), then the most recent emphasised.
+    var prev = hist.slice(-40, -1).map(lbl);
+    if (!hist.length) {
+      el.recentPrev.textContent = "–";
+      el.recentLast.textContent = "";
+    } else {
+      el.recentPrev.textContent = prev.length ? prev.join(" · ") + " ·" : "";
+      el.recentLast.textContent = lbl(hist[hist.length - 1]);
+    }
+
+    // Key badges + active rings
+    var counts = {};
+    hist.forEach(function (v) { counts[v] = (counts[v] || 0) + 1; });
+    var keyNodes = el.keys.children;
+    for (var n = 0; n < KEY_VALUES.length; n++) {
+      var v = KEY_VALUES[n];
+      var c = counts[v] || 0;
+      var node = keyNodes[n];
+      node.classList.toggle("active", c > 0);
+      node._badge.textContent = c;
+    }
+
+    // Teams
+    var teamNodes = el.teams.children;
+    [0, 1].forEach(function (t) {
+      var teamNode = teamNodes[t];
+      var teamSum = 0;
+      [0, 1, 2].forEach(function (j) {
+        var i = t * 3 + j;
+        var row = teamNode.children[j];
+        var s = sumOf(state.hists[i]);
+        teamSum += s;
+        var on = i === state.active;
+        row.classList.toggle("active", on);
+        if (row._input.value !== state.names[i]) row._input.value = state.names[i];
+        row._ringe.textContent = s;
+      });
+      teamNode._sumValue.textContent = teamSum;
+    });
+
+    // Clear button states
+    el.btnClear.textContent = state.confirm ? "Wirklich löschen?" : "Schütze löschen";
+    el.btnClear.classList.toggle("confirm", state.confirm);
+    el.btnUndo.style.opacity = hist.length ? "1" : "0.4";
+
+    var anyRings = state.hists.some(function (h) { return h.length; });
+    el.btnClearAll.textContent = state.confirmAll ? "Wirklich alles löschen?" : "alles löschen";
+    el.btnClearAll.classList.toggle("confirm", state.confirmAll);
+    el.btnClearAll.style.opacity = anyRings ? "1" : "0.4";
+  }
+
+  function render() { updateDynamic(); }
+
+  el.btnClear.addEventListener("click", clear);
+  el.btnUndo.addEventListener("click", undo);
+  el.btnClearAll.addEventListener("click", clearAll);
+
+  load();        // restore saved names + scores before first paint
+  buildKeys();
+  buildTeams();
+  render();
+})();
+</script>
+</body>
+</html>
